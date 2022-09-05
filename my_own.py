@@ -139,10 +139,10 @@ class Lexer:
 
             self.advance()
 
-            if dot_count == 0:
-                return Token(TT_INT, int(num_str), pos_start, self.pos)
-            else: 
-                return Token(TT_FLOAT, float(num_str), pos_start, self.pos)
+        if dot_count == 0:
+            return Token(TT_INT, int(num_str), pos_start, self.pos)
+        else: 
+            return Token(TT_FLOAT, float(num_str), pos_start, self.pos)
 
     def make_tokens(self):
         tokens = []
@@ -238,7 +238,6 @@ class ParseResult:
             if res.error: self.error = res.error
             return res.node
         
-        print(f'Returning res: {res}')
         return res
 
     def success(self, node):
@@ -277,14 +276,12 @@ class Parser:
         return self.current_tok
 
     def factor(self):
-        print(f'Run factor, current tok: {self.current_tok}')
         res = ParseResult()
         tok = self.current_tok
 
         if tok.type in (TT_PLUS, TT_MINUS):
             res.register(self.advance())
             factor = res.register(self.factor())
-            print('Factor: {factor}')
             if res.error: return res
             return res.success(UnaryOpNode(tok, factor))
 
@@ -308,7 +305,6 @@ class Parser:
                     ))
 
         error_msg = 'Expected int or float'
-        print(error_msg)
         return res.failure(InvalidSyntaxError(tok.pos_start, tok.pos_end, error_msg))
 
     def term(self):
@@ -329,7 +325,6 @@ class Parser:
             right  = res.register(func())
             if res.error: return res
             left   = BinOpNode(left, op_tok, right)
-            print(f'left: {left}')
         
         return res.success(left)
 
