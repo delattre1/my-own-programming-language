@@ -53,6 +53,12 @@ class InvalidSyntaxError(Error):
     def __init__(self, pos_start, pos_end, details):
         super().__init__(pos_start, pos_end, 'Invalid Syntax', details)
 
+class RuntimeError(Error):
+    def __init__(self, pos_start, pos_end, details=''):
+        super().__init__(pos_start, pos_end, 'Runtime Error', details)
+
+
+
 ### POSITION ###
 
 class Position:
@@ -338,6 +344,24 @@ class Parser:
         return res.success(left)
 
 
+### RUNTIME RESULT ###
+
+class RuntimeResult:
+    def __init__(self):
+        self.value, self.error = None, None
+
+    def register(self, res):
+        if res.error: self.error = res.error
+        return res.value
+    
+    def success(self, value):
+        self.value = value
+        return self
+
+    def failure(self, error):
+        self.error = error
+        return self
+
 ### VALUES ###
 
 class Number:
@@ -352,19 +376,27 @@ class Number:
 
     def added_to(self, other):
         if isinstance(other, Number):
-            return Number(self.value + other.value)
+            return Number(self.value + other.value), None
     
     def subtracted_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value - other.value)
+            return Number(self.value - other.value), None
     
     def multiplied_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value * other.value)
+            return Number(self.value * other.value), None
     
     def divided_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value / other.value)
+            if other.value == 0:
+                error_msg = 'Division by zero'
+                return None, RuntimeError(
+                                other.pos_start, 
+                                other.pos_end,
+                                error_msg
+                            )
+
+            return Number(self.value / other.value), None
 
     def __repr__(self):
         return str(self.value)
@@ -384,31 +416,48 @@ class Interpreter:
     def visit_NumberNode(self, node):
         number = Number(node.tok.value)
         number = number.set_pos(node.pos_start, node.pos_end)
-        return number
+        return RuntimeResult().success(number)
 
     def visit_BinOpNode(self, node):
-        left  = self.visit(node.left_node)
-        right = self.visit(node.right_node)
-        op    = node.op_tok.type
+        res = RuntimeResult()
+        left  = res.register(self.visit(node.left_node))
+        if res.error: return res
+        right = res.register(self.visit(node.right_node))
+        if res.error: return res
+
+        
+        error  = None
+        op     = node.op_tok.type
         
         if   op == TT_PLUS:
-            result = left.added_to(right)
+            result, error = left.added_to(right)
         elif op == TT_MINUS:
-            result = left.subtracted_by(right)
+            result, error = left.subtracted_by(right)
         elif op == TT_MUL:
-            result = left.multiplied_by(right)
+            result, error = left.multiplied_by(right)
         elif op == TT_DIV:
-            result = left.divided_by(right)
-        
-        return result.set_pos(node.pos_start, node.pos_end)
+            result, error = left.divided_by(right)
+
+        if error: return res.failure(error)
+        else:
+            result = result.set_pos(node.pos_start, node.pos_end)
+            return res.success(result)
     
     def visit_UnaryOpNode(self, node):
-        number = self.visit(node.node)
+        res = RuntimeResult()
+
+        number = res.register(self.visit(node.node))
+        if res.error: return res
+
+        error = None
 
         if node.op_tok.type == TT_MINUS:
-            number = number.multiplied_by(Number(-1))
+            number, error = number.multiplied_by(Number(-1))
 
-        return number.set_pos(node.pos_start, node.pos_end)
+        if error: return res.failure(error)
+        else:
+            number = number.set_pos(node.pos_start, node.pos_end) 
+            return res.success(number)
 
 
 
@@ -432,7 +481,7 @@ def run(fn, text):
     interpreter = Interpreter()
     res = interpreter.visit(ast.node)
 
-    return res, None
+    return res.value, res.error
 
 
 
