@@ -8,7 +8,7 @@ while True:
         exit()
 
     #print(text)
-    res, error = my_own.run(text)
+    res, error = my_own.run('<stdin>', text)
 
     if error: print(error.as_string())
     else: print(res)
