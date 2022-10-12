@@ -322,20 +322,23 @@ class UnaryOpNode:
 class ParseResult:
     def __init__(self):
         self.error, self.node = None, None
+        self.advance_count = 0
+
+    def register_advancement(self):
+        self.advance_count += 1
     
     def register(self, res):
-        if isinstance(res, ParseResult):
-            if res.error: self.error = res.error
-            return res.node
+        self.advance_count += res.advance_count
+        if res.error: self.error = res.error
+        return res.node
         
-        return res
-
     def success(self, node):
         self.node = node
         return self
 
     def failure(self, error):
-        self.error = error
+        if not self.error or self.advance_count == 0:
+            self.error = error
         return self
 
 
@@ -370,19 +373,23 @@ class Parser:
         tok = self.current_tok
 
         if tok.type in (TT_INT, TT_FLOAT):
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
             return res.success(NumberNode(tok))
 
         elif tok.type == TT_IDENTIFIER:
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
             return res.success(VarAccessNode(tok))
         
         elif tok.type == TT_LPAREN:
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
             expression = res.register(self.expression())
             if res.error: return res
             if self.current_tok.type == TT_RPAREN:
-                res.register(self.advance())
+                res.register_advancement()
+                self.advance()
                 return res.success(expression)
             else:
                 error_msg = "Expected ')'" 
@@ -392,7 +399,7 @@ class Parser:
                         error_msg
                     ))
 
-        error_msg = "Expected int or float, '+', '-', or '('"
+        error_msg = "Expected int, float, identifier, '+', '-', or '('"
         return res.failure(InvalidSyntaxError(tok.pos_start, tok.pos_end, error_msg))
 
     def power(self):
@@ -403,7 +410,8 @@ class Parser:
         tok = self.current_tok
 
         if tok.type in (TT_PLUS, TT_MINUS):
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
             factor = res.register(self.factor())
             if res.error: return res
             return res.success(UnaryOpNode(tok, factor))
@@ -416,7 +424,8 @@ class Parser:
     def expression(self):
         res = ParseResult()
         if self.current_tok.matches(TT_KEYWORD, 'VAR'):
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
 
             if self.current_tok.type != TT_IDENTIFIER:
                 error_msg = "Expected identifier"
@@ -424,25 +433,29 @@ class Parser:
                     self.current_tok.pos_start, self.current_tok.pos_end, error_msg))
 
             var_name = self.current_tok
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
 
             if self.current_tok.type != TT_EQ:
                 error_msg = "Expected '='"
                 return res.failure(InvalidSyntaxError(
                     self.current_tok.pos_start, self.current_tok.pos_end, error_msg))
 
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
             expression = res.register(self.expression())
             if res.error: return res
             return res.success(VarAssignNode(var_name, expression))
 
-        return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
+        node = res.register(self.bin_op(self.term, (TT_PLUS, TT_MINUS)))
+        if res.error: 
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start,
+                self.current_tok.pos_end,
+                "Expected 'VAR', int, float, identifier, '+', '-' or '('"
+                ))
 
-         
-
-
-
-        return self.bin_op(self.term, (TT_PLUS, TT_MINUS))
+        return res.success(node)
 
     def bin_op(self, func_a, ops, func_b=None):
         if not func_b: func_b = func_a
@@ -453,7 +466,8 @@ class Parser:
 
         while self.current_tok.type in ops:
             op_tok = self.current_tok
-            res.register(self.advance())
+            res.register_advancement()
+            self.advance()
             if res.error: return res
             right  = res.register(func_b())
             if res.error: return res
@@ -526,6 +540,12 @@ class Number:
         if isinstance(other, Number):
             return Number(self.value ** other.value).set_context(self.context), None
 
+    def copy(self):
+        copy = Number(self.value)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+
     def __repr__(self):
         return str(self.value)
 
@@ -588,7 +608,7 @@ class Interpreter:
                             error_msg, 
                             self.context
                         )
-
+        value = value.copy().set_pos(node.pos_start, node.pos_end)
         return res.success(value)
 
     def visit_VarAssignNode(self, node, context):
