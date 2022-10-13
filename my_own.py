@@ -53,7 +53,7 @@ TT_EQ          = 'EQ'
 TT_IDENTIFIER  = 'IDENTIFIER'
 TT_KEYWORD     = 'KEYWORD'
 
-# Logical Operators
+# Logical and Comparison Operators
 TT_EE  = 'EE'
 TT_NE  = 'NE'
 TT_LT  = 'LT'
@@ -61,7 +61,7 @@ TT_GT  = 'GT'
 TT_LTE = 'LTE'
 TT_GTE = 'GTE'
 
-KEYWORDS = ['VAR', 'AND', 'OR', 'NOT']
+KEYWORDS = ['VAR', 'AND', 'OR', 'NOT', 'IF', 'THEN', 'ELIF', 'ELSE']
 
 class Token:
     def __init__(self, type_, value=None, pos_start=None, pos_end=None) -> None:
@@ -301,6 +301,74 @@ class Parser:
             self.current_tok = self.tokens[self.tok_idx]
         return self.current_tok
 
+
+    def if_expr(self):
+        res = ParseResult()
+        cases = []
+        else_case = None
+        
+        # Check IF 
+        if not self.current_tok.matches(TT_KEYWORD, 'IF'):
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, 
+                self.current_tok.pos_end,
+                f"Expected 'IF'"
+            ))
+
+        res.register_advancement()
+        self.advance()
+
+        condition = res.register(self.expression())
+        if res.error: return res
+        
+        # Check Then
+        if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, 
+                self.current_tok.pos_end,
+                f"Expected 'THEN'"
+            ))
+
+        res.register_advancement()
+        self.advance()
+
+        expr = res.register(self.expression())
+        if res.error: return res
+        cases.append((condition, expr))
+        
+        # Check multiple ELIF's
+        while self.current_tok.matches(TT_KEYWORD, 'ELIF'):
+            res.register_advancement()
+            self.advance()
+
+            condition = res.register(self.expression())
+            if res.error: return res
+            
+            # Check Then
+            if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, 
+                    self.current_tok.pos_end,
+                    f"Expected 'THEN'"
+                ))
+
+            res.register_advancement()
+            self.advance()
+
+            expr = res.register(self.expression())
+            if res.error: return res
+            cases.append((condition, expr))
+
+        if self.current_tok.matches(TT_KEYWORD, 'ELSE'):
+            res.register_advancement()
+            self.advance()
+
+            else_case = res.register(self.expression())
+            if res.error: return res
+
+        return res.success(IfNode(cases, else_case))
+
+
     def atom(self):
         res = ParseResult()
         tok = self.current_tok
@@ -331,6 +399,10 @@ class Parser:
                         self.current_tok.pos_end,
                         error_msg
                     ))
+        elif tok.matches(TT_KEYWORD, 'IF'):
+            if_expr = res.register(self.if_expr())
+            if res.error: return res
+            return res.success(if_expr)
 
         error_msg = "Expected int, float, identifier, '+', '-', or '('"
         return res.failure(InvalidSyntaxError(tok.pos_start, tok.pos_end, error_msg))
@@ -567,6 +639,27 @@ class Interpreter:
         else:
             number = number.set_pos(node.pos_start, node.pos_end) 
             return res.success(number)
+
+    def visit_IfNode(self, node, context):
+        res = RuntimeResult()
+        
+        for condition, expr in node.cases:
+            condition_value = res.register(self.visit(condition, context))
+            if res.error: return res
+
+            if condition_value.is_true():
+                expr_value = res.register(self.visit(expr, context))
+                if res.error: return res
+                return res.success(expr_value)
+
+        if node.else_case:
+            else_value = res.register(self.visit(node.else_case, context))
+            if res.error: return res
+            return res.success(else_value)
+
+        return res.success(None)
+            
+
 
 ### RUN ###
 

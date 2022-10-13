@@ -11,5 +11,5 @@ while True:
     res, error = my_own.run('<stdin>', text)
 
     if error: print(error.as_string())
-    else: print(res)
+    elif res: print(res)
     #import pdb; pdb.set_trace()
