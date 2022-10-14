@@ -126,3 +126,44 @@ class Interpreter:
             return res.success(else_value)
 
         return res.success(None)
+
+
+    def visit_ForNode(self, node, context):
+        res = RuntimeResult()
+
+        start_value = res.register(self.visit(node.start_value_node, context))
+        if res.error: return res
+
+        end_value = res.register(self.visit(node.end_value_node, context))
+        if res.error: return res
+
+        if node.step_value_node:
+            step_value = res.register(self.visit(node.step_value_node, context))
+            if res.error: return res
+        else: step_value = Number(1)
+
+        for i in range(start_value.value, end_value.value, step_value.value):
+            # Adding the idx to the symbol table so It can be accessed inside the loop
+            context.symbol_table.set(node.var_name_tok.value, Number(i))
+            res.register(self.visit(node.body_node, context))
+            if res.error: return res
+
+        return res.success(None)
+
+    def visit_WhileNode(self, node, context):
+        res = RuntimeResult()
+
+        condition = res.register(self.visit(node.condition_node, context))
+        if res.error: return res
+
+        while condition.is_true():
+            res.register(self.visit(node.body_node, context))
+            if res.error: return res
+
+            condition = res.register(self.visit(node.condition_node, context))
+            if res.error: return res
+
+        return res.success(None)
+
+
+
