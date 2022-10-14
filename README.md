@@ -8,14 +8,18 @@ comp-expr  : NOT comp-expr
 
 arith-expr : term ((PLUS|MINUS) term)*
 
-term   : factor ((MUL | DIV) factor)*
+term    : factor ((MUL | DIV) factor)*
 
-factor : (PLUS | MINUS) factor
-       : power
+factor  : (PLUS | MINUS) factor
+        : power
 
-power  : atom (POW factor)*
+power   : atom (POW factor)*
 
-atom   : INT | FLOAT | IDENTIFIER
-       : LPAREN expr RPAREN
+atom    : INT | FLOAT | IDENTIFIER
+        : LPAREN expr RPAREN
+        : if-expr
 
+if-expr : KEYWORD:IF expr KEYWORD:THEN expr
+        : (KEYWORD:ELIF expr KEYWORD:THEN expr)*
+        : (KEYWORD:ELSE expr)?
 ```
