@@ -66,6 +66,18 @@ class Lexer:
 
         tok_type = TT_KEYWORD if id_str in KEYWORDS else TT_IDENTIFIER
         return Token(tok_type, id_str, pos_start, self.pos)
+
+
+    def make_minus_or_arrow(self):
+        tok_type = TT_MINUS
+        pos_start = self.pos.copy()
+
+        self.advance()
+        if self.current_char == '>':
+            tok_type = TT_ARROW
+            self.advance()
+
+        return Token(tok_type, pos_start, self.pos)
     
     def make_not_equals(self):
         pos_start = self.pos.copy()
@@ -115,8 +127,6 @@ class Lexer:
     def make_tokens(self):
         tokens = []
 
-        #import pdb; pdb.set_trace()
-
         while self.current_char != None:
             if self.current_char in ' \t':
                 self.advance()
@@ -127,13 +137,11 @@ class Lexer:
             elif self.current_char in LETTERS:
                 tokens.append(self.make_identifier())
 
+            elif self.current_char == '-':
+                tokens.append(self.make_minus_or_arrow())
+
             elif self.current_char == '+':
                 token = Token(TT_PLUS, pos_start=self.pos)
-                tokens.append(token)
-                self.advance()
-
-            elif self.current_char == '-':
-                token = Token(TT_MINUS, pos_start=self.pos)
                 tokens.append(token)
                 self.advance()
 
@@ -175,6 +183,11 @@ class Lexer:
 
             elif self.current_char == '>':
                 tokens.append(self.make_greater_than())
+
+            elif self.current_char == ',':
+                token = Token(TT_COMMA, pos_start=self.pos)
+                tokens.append(token)
+                self.advance()
 
             else:
                 pos_start = self.pos.copy()

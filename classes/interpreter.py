@@ -165,5 +165,19 @@ class Interpreter:
 
         return res.success(None)
 
+    def visit_FuncDefNode(self, node, context):
+        res = RuntimeResult()
+
+        condition = res.register(self.visit(node.condition_node, context))
+        if res.error: return res
+
+        while condition.is_true():
+            res.register(self.visit(node.body_node, context))
+            if res.error: return res
+
+            condition = res.register(self.visit(node.condition_node, context))
+            if res.error: return res
+
+        return res.success(None)
 
 

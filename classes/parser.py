@@ -50,6 +50,107 @@ class Parser:
             self.current_tok = self.tokens[self.tok_idx]
         return self.current_tok
 
+    def func_def(self):
+        res = ParseResult()
+
+        # Check 'FOR' KEYWORD
+        if not self.current_tok.matches(TT_KEYWORD, 'FUN'):
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, 
+                self.current_tok.pos_end,
+                f"Expected 'FUN'"
+            ))
+        res.register_advancement()
+        self.advance()
+
+        # Check identifier
+        if self.current_tok.type == TT_IDENTIFIER:
+            #Store the function name
+            var_name_tok = self.current_tok
+            res.register_advancement()
+            self.advance()
+    
+            if self.current_tok.type != TT_LPAREN:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, 
+                    self.current_tok.pos_end,
+                    f"Expected '('"
+                ))
+
+        else:
+            var_name_tok = None
+            if self.current_tok.type != TT_LPAREN:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, 
+                    self.current_tok.pos_end,
+                    f"Expected identifier or '('"
+                ))
+        res.register_advancement()
+        self.advance()
+        arg_name_toks = []
+
+        # Check func arguments
+        if self.current_tok.type == TT_IDENTIFIER:
+            #Store the arg name
+            arg_name_toks.append(self.current_tok)
+            res.register_advancement()
+            self.advance()
+
+            while self.current_tok.type == TT_COMMA:
+                res.register_advancement()
+                self.advance()
+
+                # Check func arguments
+                if self.current_tok.type != TT_IDENTIFIER:
+                    return res.failure(InvalidSyntaxError(
+                        self.current_tok.pos_start, 
+                        self.current_tok.pos_end,
+                        f"Expected identifier"
+                    ))
+                #Store the arg name
+                arg_name_toks.append(self.current_tok)
+                res.register_advancement()
+                self.advance()
+                
+            # Check RPAREN (case when func has args)
+            if self.current_tok.type != TT_RPAREN:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, 
+                    self.current_tok.pos_end,
+                    f"Expected ')' or ','"
+                ))
+
+        # Check RPAREN (case func doesnt have args)
+        else:
+            if self.current_tok.type != TT_RPAREN:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, 
+                    self.current_tok.pos_end,
+                    f"Expected ')' or 'identifier'"
+                ))
+
+        res.register_advancement()
+        self.advance()
+
+        # Check arrow
+        if self.current_tok.type != TT_ARROW:
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, 
+                self.current_tok.pos_end,
+                f"Expected ->"
+            ))
+        res.register_advancement()
+        self.advance()
+
+        body_node = res.register(self.expression())
+        if res.error: return res
+        return res.success(FuncDefNode(var_name_tok, 
+                                       arg_name_toks, 
+                                       body_node))
+
+
+
+
     def for_expr(self):
         res = ParseResult()
 
@@ -275,11 +376,63 @@ class Parser:
             if res.error: return res
             return res.success(while_expr)
 
+        elif tok.matches(TT_KEYWORD, 'FUN'):
+            func_def = res.register(self.func_def())
+            if res.error: return res
+            return res.success(func_def)
+
         error_msg = "Expected int, float, identifier, '+', '-', or '('"
         return res.failure(InvalidSyntaxError(tok.pos_start, tok.pos_end, error_msg))
 
     def power(self):
-        return self.bin_op(self.atom, (TT_POW, ), self.factor) 
+        return self.bin_op(self.call, (TT_POW, ), self.factor) 
+
+    def call(self):
+        res = ParseResult()
+        atom = res.register(self.atom())
+        if res.error: return res
+
+        arg_nodes = []
+        if self.current_tok.type == TT_LPAREN:
+            res.register_advancement()
+            self.advance()
+            
+            if self.current_tok.type == TT_RPAREN:
+                res.register_advancement()
+                self.advance()
+            else:
+                # Register function arguments
+                expr = res.register(self.expression())
+                if res.error: 
+                    return res.failure(InvalidSyntaxError(
+                        self.current_tok.pos_start,
+                        self.current_tok.pos_end,
+                        "Expected ')', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-'"))
+
+                arg_nodes.append(expr)
+
+                while self.current_tok.type == TT_COMMA:
+                    res.register_advancement()
+                    self.advance()
+
+                    expr = res.register(self.expression())
+                    if res.error: return res
+                    arg_nodes.append(expr)
+                    
+                # Check RPAREN (case when func has args)
+                if self.current_tok.type != TT_RPAREN:
+                    return res.failure(InvalidSyntaxError(
+                        self.current_tok.pos_start, 
+                        self.current_tok.pos_end,
+                        f"Expected ')' or ','"
+                    ))
+
+                res.register_advancement()
+                self.advance()
+            return res.success(CallNode(atom, arg_nodes))
+        # If there's no parenthesis, dont 'call the function', just pass the value of the atom.
+        return res.success(atom)
+
 
     def factor(self):
         res = ParseResult()

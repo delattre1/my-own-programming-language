@@ -28,6 +28,10 @@ TT_GT  = 'GT'
 TT_LTE = 'LTE'
 TT_GTE = 'GTE'
 
-KEYWORDS = ['VAR', 'AND', 'OR', 'NOT', 'IF', 'THEN', 'ELIF', 'ELSE', 'FOR', 'TO', 'STEP', 'WHILE']
+# Used in functions
+TT_COMMA = 'COMMA'
+TT_ARROW = 'ARROW'
+
+KEYWORDS = ['VAR', 'AND', 'OR', 'NOT', 'IF', 'THEN', 'ELIF', 'ELSE', 'FOR', 'TO', 'STEP', 'WHILE', 'FUN']
 
 
