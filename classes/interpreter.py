@@ -1,8 +1,222 @@
+from utils import Context, SymbolTable
 from constants     import *
 from classes.error import *
 from classes.node  import *
-from classes.number  import Number
 from classes.runtime import RuntimeResult
+
+
+### VALUE is HERE to avoid circular import with INTERPRETER
+
+### VALUES ###
+
+class Value:
+    def __init__(self):
+        self.set_pos()
+        self.set_context()
+
+    def set_pos(self, pos_start=None, pos_end=None):
+        self.pos_start = pos_start
+        self.pos_end   = pos_end
+        return self
+
+    def set_context(self, context=None):
+        self.context = context
+        return self
+
+    def illegal_operation(self, other=None):
+        if not other: other = self
+        return RuntimeError(
+            self.pos_start, 
+            self.pos_end,
+            'Illegal operation', 
+            self.context
+        )
+
+    def added_to(self, other):
+        return None, self.illegal_operation(other)
+
+    def subtracted_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def multiplied_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def divided_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def powed_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comp_eq(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comp_ne(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comp_lt(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comp_lte(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comp_gt(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comp_gte(self, other):
+        return None, self.illegal_operation(other)
+
+    def anded_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def ored_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def notted(self):
+        return None, self.illegal_operation()
+
+    def copy(self):
+        raise Exception('No copy method defined')
+
+    def is_true(self):
+        return False
+
+class Number(Value):
+    def __init__(self, value):
+        super().__init__()
+        self.value = value
+
+    def added_to(self, other):
+        if isinstance(other, Number):
+            return Number(self.value + other.value).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+    
+    def subtracted_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value - other.value).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+    
+    def multiplied_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value * other.value).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+    
+    def divided_by(self, other):
+        if isinstance(other, Number):
+            if other.value == 0:
+                error_msg = 'Division by zero'
+                return None, RuntimeError(
+                                other.pos_start, 
+                                other.pos_end,
+                                error_msg, 
+                                self.context
+                            )
+
+            return Number(self.value / other.value).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def powed_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value ** other.value).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    # Logical Operators
+    def get_comp_eq(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value == other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def get_comp_ne(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value != other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def get_comp_lt(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value <  other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def get_comp_lte(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value <= other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def get_comp_gt(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value >  other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def get_comp_gte(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value >= other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def anded_by(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value and other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def ored_by(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value or  other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+        
+    def notted(self):
+        return Number(1 if self.value == 0 else 0).set_context(self.context), None
+
+    def copy(self):
+        copy = Number(self.value)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+
+    def is_true(self):
+        return self.value != 0
+
+    def __repr__(self):
+        return str(self.value)
+
+
+class Function(Value):
+    def __init__(self, name, body_node, arg_names):
+        super().__init__()
+        self.name = name or '<anonymous>'
+        self.body_node = body_node
+        self.arg_names = arg_names
+
+    def execute(self, args):
+        res = RuntimeResult()
+        interpreter = Interpreter()
+        new_context = Context(self.name, self.context, self.pos_start)
+        new_context.symbol_table = SymbolTable(new_context.parent.symbol_table)
+        
+        expected_args_size = len(self.arg_names)
+        if len(args) != expected_args_size:
+            return res.failure(RuntimeError(
+                self.pos_start, self.pos_end,
+                f"'{self.name}' expected {expected_args_size} args, but received {len(args)}",
+                self.context
+                ))
+
+        for idx, arg_value in enumerate(args):
+            arg_name = self.arg_names[idx]
+            arg_value.set_context(new_context)
+            new_context.symbol_table.set(arg_name, arg_value)
+
+        value = res.register(interpreter.visit(self.body_node, new_context))
+        if res.error: return res
+        return res.success(value)
+
+    def copy(self):
+        copy = Function(self.name, self.body_node, self.arg_names)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+
+    def __repr__(self):
+        return f'<function {self.name}>'
+
+
+
 
 ### INTERPRETER ###
 
@@ -168,16 +382,30 @@ class Interpreter:
     def visit_FuncDefNode(self, node, context):
         res = RuntimeResult()
 
-        condition = res.register(self.visit(node.condition_node, context))
+        func_name = node.var_name_tok.value if node.var_name_tok else None
+        arg_names = [arg_name.value for arg_name in node.arg_name_toks]
+        node_to_call = node.node_to_call
+        func_value = Function(func_name, node_to_call, arg_names).set_context(context).set_pos(node.pos_start, node.pos_end)
+
+        #If function has name, add it to the symbol_table
+        if node.var_name_tok:
+            context.symbol_table.set(func_name, func_value)
+        return res.success(func_value)
+
+
+    def visit_CallNode(self, node, context):
+        res = RuntimeResult()
+        args = []
+
+        value_to_call = res.register(self.visit(node.node_to_call, context))
         if res.error: return res
+        value_to_call = value_to_call.copy().set_pos(node.pos_start, node.pos_end)
 
-        while condition.is_true():
-            res.register(self.visit(node.body_node, context))
+        for arg_node in node.arg_nodes:
+            args.append(res.register(self.visit(arg_node, context)))
             if res.error: return res
 
-            condition = res.register(self.visit(node.condition_node, context))
-            if res.error: return res
-
-        return res.success(None)
-
+        return_value = res.register(value_to_call.execute(args))
+        if res.error: return res
+        return res.success(return_value)
 

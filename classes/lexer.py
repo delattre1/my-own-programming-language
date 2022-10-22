@@ -1,5 +1,6 @@
 from constants import * 
 from classes.token import Token
+from classes.error import *
 
 class Position:
     def __init__(self, idx, ln, col, fn, ftxt):

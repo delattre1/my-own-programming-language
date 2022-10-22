@@ -381,7 +381,7 @@ class Parser:
             if res.error: return res
             return res.success(func_def)
 
-        error_msg = "Expected int, float, identifier, '+', '-', or '('"
+        error_msg = "Expected int, float, identifier, '+', '-', '(', 'IF', 'FOR', WHILE', 'FUN'"
         return res.failure(InvalidSyntaxError(tok.pos_start, tok.pos_end, error_msg))
 
     def power(self):
@@ -508,7 +508,7 @@ class Parser:
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start,
                 self.current_tok.pos_end,
-                "Expected 'VAR', int, float, identifier, '+', '-' or '('"
+                "Expected 'VAR', int, float, identifier, 'IF', 'FOR', WHILE', 'FUN', '+', '-' or '('"
                 ))
 
         return res.success(node)
