@@ -216,7 +216,39 @@ class Function(Value):
         return f'<function {self.name}>'
 
 
+class String(Value):
+    def __init__(self, value):
+        super().__init__()
+        self.value = value
 
+    def added_to(self, other):
+        if isinstance(other, String):
+            return String(self.value + other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
+    
+    def multiplied_by(self, other):
+        if isinstance(other, Number):
+            return String(self.value * other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
+
+    def is_true(self):
+        return len(self.value) > 0
+
+    def get_comp_eq(self, other):
+        if isinstance(other, String):
+            return Number(int(self.value == other.value)).set_context(self.context), None
+        else: return None, Value.illegal_operation(self.pos_start, other.pos_end)
+
+    def copy(self):
+        copy = String(self.value)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+
+    def __repr__(self):
+        return f'"{self.value}"'
 
 ### INTERPRETER ###
 
@@ -268,7 +300,6 @@ class Interpreter:
         if res.error: return res
 
         op     = node.op_tok.type
-        
         if   op == TT_PLUS:
             result, error = left.added_to(right)
         elif op == TT_MINUS:
@@ -296,8 +327,6 @@ class Interpreter:
             result, error = left.anded_by(right)
         elif node.op_tok.matches(TT_KEYWORD, 'OR'):
             result, error = left.ored_by(right)
-
-
 
         if error: return res.failure(error)
         else:
@@ -408,4 +437,9 @@ class Interpreter:
         return_value = res.register(value_to_call.execute(args))
         if res.error: return res
         return res.success(return_value)
+
+    def visit_StringNode(self, node, context):
+        return RuntimeResult().success(
+            String(node.tok.value).set_context(context).set_pos(node.pos_start,node.pos_end)
+        )
 

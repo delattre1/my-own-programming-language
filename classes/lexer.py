@@ -124,6 +124,32 @@ class Lexer:
         
         return Token(tok_type, pos_start=pos_start, pos_end=self.pos)
 
+    def make_string(self):
+        quote_type = self.current_char # Saving ' or "
+        str_ = ''
+        pos_start = self.pos.copy()
+        is_escape_char = False
+        escape_chars = {
+            'n': '\n',
+            't': '\t'
+        }
+
+        self.advance()
+        
+        while self.current_char != None and (self.current_char != quote_type or is_escape_char):
+
+            if is_escape_char:
+                str_ += escape_chars.get(self.current_char, self.current_char)
+                is_escape_char = False
+            elif self.current_char == '\\':
+                is_escape_char = True
+            else:
+                str_ += self.current_char
+
+            self.advance()
+
+        self.advance()
+        return Token(TT_STRING, str_, pos_start, self.pos)
 
     def make_tokens(self):
         tokens = []
@@ -137,6 +163,9 @@ class Lexer:
 
             elif self.current_char in LETTERS:
                 tokens.append(self.make_identifier())
+            
+            elif self.current_char in '\'"':
+                tokens.append(self.make_string())
 
             elif self.current_char == '-':
                 tokens.append(self.make_minus_or_arrow())
