@@ -175,21 +175,27 @@ class Number(Value):
     def __repr__(self):
         return str(self.value)
 
+Number.null  = Number(0)
+Number.false = Number(0)
+Number.true  = Number(1)
 
-class Function(Value):
-    def __init__(self, name, body_node, arg_names):
+
+
+### FUNCTIONS ###
+class BaseFunction(Value):
+    def __init__(self, name):
         super().__init__()
         self.name = name or '<anonymous>'
-        self.body_node = body_node
-        self.arg_names = arg_names
 
-    def execute(self, args):
-        res = RuntimeResult()
-        interpreter = Interpreter()
+    def generate_new_context(self):
         new_context = Context(self.name, self.context, self.pos_start)
         new_context.symbol_table = SymbolTable(new_context.parent.symbol_table)
-        
-        expected_args_size = len(self.arg_names)
+        return new_context
+
+    def check_args(self, arg_names, args):
+        res = RuntimeResult()
+        expected_args_size = len(arg_names)
+
         if len(args) != expected_args_size:
             return res.failure(RuntimeError(
                 self.pos_start, self.pos_end,
@@ -197,12 +203,108 @@ class Function(Value):
                 self.context
                 ))
 
-        for idx, arg_value in enumerate(args):
-            arg_name = self.arg_names[idx]
-            arg_value.set_context(new_context)
-            new_context.symbol_table.set(arg_name, arg_value)
+        return res.success(None)
 
-        value = res.register(interpreter.visit(self.body_node, new_context))
+    def populate_args(self, arg_names, args, exec_context):
+        '''Populate the symbol_table'''
+        for idx, arg_value in enumerate(args):
+            arg_name = arg_names[idx]
+            arg_value.set_context(exec_context)
+            exec_context.symbol_table.set(arg_name, arg_value)
+
+    def check_and_populate_args(self, arg_names, args, exec_context):
+        res = RuntimeResult()
+        res.register(self.check_args(arg_names, args))
+        if res.error: return res
+        self.populate_args(arg_names, args, exec_context)
+        return res.success(None)
+
+
+class BuiltInFunction(BaseFunction):
+    def __init__(self, name):
+        super().__init__(name)
+
+    def execute(self, args):
+        '''
+        Create separate execute methods for 
+        each builtInFunction. Ex: 
+            If name function is print, we will call execute_print()
+        '''
+        res = RuntimeResult()
+        exec_context = self.generate_new_context()
+        
+        
+        method_name = f'execute_{self.name}'
+        method = getattr(self, method_name, self.no_visit_method)
+
+        res.register(self.check_and_populate_args(method.arg_names, args, exec_context))
+        if res.error: return res
+
+        return_value = res.register(method(exec_context))
+        if res.error: return res
+        return res.success(return_value)
+
+    def no_visit_method(self, node, context):
+        raise Exception(f'No execute_{self.name} method defined')
+
+    def copy(self):
+        copy = BuiltInFunction(self.name)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+
+    def __repr__(self):
+        return f'<built-in function {self.name}>'
+
+    ## Creating the built-in functions
+
+    def execute_print(self, exec_context):
+        print(str(exec_context.symbol_table.get('value')))
+        return RuntimeResult().success(Number.null)
+    execute_print.arg_names = ['value']
+
+    def execute_print_ret(self, exec_context):
+        str_ = String(str(exec_context.symbol_table.get('value')))
+        return RuntimeResult().success(str_)
+    execute_print_ret.arg_names = ['value']
+    
+    def execute_input(self, exec_context):
+        text = input()
+        return RuntimeResult().success(String(text))
+    execute_input.arg_names = []
+
+    def execute_input_int(self, exec_context):
+        text = input()
+        while True:
+            try:
+                number = int(text)
+                break
+            except ValueError:
+                    print(f"'{text}' must be an integer. Try again!")
+        return RuntimeResult().success(Number(number))
+
+
+BuiltInFunction.print     = BuiltInFunction("print")
+BuiltInFunction.print_ret = BuiltInFunction("print_ret")
+BuiltInFunction.input     = BuiltInFunction("input")
+BuiltInFunction.input_int = BuiltInFunction("input_int")
+
+
+class Function(BaseFunction):
+    def __init__(self, name, body_node, arg_names):
+        super().__init__(name)
+        self.body_node = body_node
+        self.arg_names = arg_names
+
+    def execute(self, args):
+        res = RuntimeResult()
+        interpreter = Interpreter()
+        exec_context = self.generate_new_context()
+
+        res.register(self.check_and_populate_args(self.arg_names, args, exec_context))
+        if res.error: return res
+
+        value = res.register(interpreter.visit(self.body_node, exec_context))
         if res.error: return res
         return res.success(value)
 
@@ -246,6 +348,9 @@ class String(Value):
         copy.set_pos(self.pos_start, self.pos_end)
         copy.set_context(self.context)
         return copy
+    
+    def __str__(self):
+        return self.value
 
     def __repr__(self):
         return f'"{self.value}"'
@@ -278,9 +383,9 @@ class Interpreter:
                             node.pos_start, 
                             node.pos_end,
                             error_msg, 
-                            self.context
+                            context
                         )
-        value = value.copy().set_pos(node.pos_start, node.pos_end)
+        value = value.copy().set_pos(node.pos_start, node.pos_end).set_context(context)
         return res.success(value)
 
     def visit_VarAssignNode(self, node, context):
@@ -436,6 +541,7 @@ class Interpreter:
 
         return_value = res.register(value_to_call.execute(args))
         if res.error: return res
+        return_value = return_value.copy().set_pos(node.pos_start, node.pos_end).set_context(context)
         return res.success(return_value)
 
     def visit_StringNode(self, node, context):

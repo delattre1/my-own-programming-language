@@ -5,14 +5,18 @@
 from utils import Context, SymbolTable
 from classes.lexer  import Lexer
 from classes.parser import Parser
-from classes.interpreter import Interpreter, Number
+from classes.interpreter import Interpreter, Number, BuiltInFunction
 
 ### RUN ###
 
 global_symbol_table = SymbolTable()
-global_symbol_table.set("null",  Number(0))
-global_symbol_table.set("TRUE",  Number(1))
-global_symbol_table.set("FALSE", Number(0))
+global_symbol_table.set("null",  Number.null)
+global_symbol_table.set("True",  Number.true)
+global_symbol_table.set("False", Number.false)
+global_symbol_table.set("print",     BuiltInFunction.print)
+global_symbol_table.set("print_ret", BuiltInFunction.print_ret)
+global_symbol_table.set("input",     BuiltInFunction.input)
+global_symbol_table.set("input_int", BuiltInFunction.input_int)
 
 def run(fn, text):
     # Generate Tokens
